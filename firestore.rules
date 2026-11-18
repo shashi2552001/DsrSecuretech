@@ -1,0 +1,767 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // Global Hardened Helpers
+    // ------------------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedSuperAdmin() {
+      return isSignedIn() && request.auth.token.email == 'itsdemoid00@gmail.com';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedSuperAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'ACTIVE'
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'ACTIVE';
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidPermissionsList(perms) {
+      return perms is list && perms.size() <= 30 && (perms.size() == 0 || perms[0] is string);
+    }
+
+    function isValidMemberUids(uids) {
+      return uids is list && uids.size() <= 25 && (uids.size() == 0 || uids[0] is string);
+    }
+
+    function isValidMemberNames(names) {
+      return names is list && names.size() <= 25 && (names.size() == 0 || names[0] is string);
+    }
+
+    // ------------------------------------------------------------------
+    // Entity Validation Blueprints
+    // ------------------------------------------------------------------
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'employeeId', 'displayName', 'email', 'role', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'uid', 'employeeId', 'displayName', 'email', 'phone', 'department', 'designation',
+          'role', 'permissions', 'managerUid', 'joiningDate', 'status', 'mustChangePassword',
+          'lastLoginAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.uid, 1, 128) &&
+        isValidString(data.employeeId, 4, 32) &&
+        data.employeeId.matches('^DSR-(SA|ADM|TM|EMP)-[0-9]{3,5}$') &&
+        isValidString(data.displayName, 2, 120) &&
+        isValidString(data.email, 3, 180) &&
+        (!('phone' in data) || isValidString(data.phone, 0, 32)) &&
+        (!('department' in data) || isValidString(data.department, 0, 100)) &&
+        (!('designation' in data) || isValidString(data.designation, 0, 100)) &&
+        data.role in ['SUPER_ADMIN', 'ADMIN', 'TEAM_MEMBER'] &&
+        (!('permissions' in data) || isValidPermissionsList(data.permissions)) &&
+        (!('managerUid' in data) || isValidString(data.managerUid, 0, 128)) &&
+        (!('joiningDate' in data) || isValidString(data.joiningDate, 0, 32)) &&
+        data.status in ['ACTIVE', 'INACTIVE'] &&
+        (!('mustChangePassword' in data) || data.mustChangePassword is bool) &&
+        (!('lastLoginAt' in data) || isValidString(data.lastLoginAt, 0, 64)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDepartment(data) {
+      return data.keys().hasAll(['id', 'name', 'isActive', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'name', 'headUid', 'headName', 'isActive', 'createdAt', 'updatedAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.name, 2, 100) &&
+        (!('headUid' in data) || isValidString(data.headUid, 0, 128)) &&
+        (!('headName' in data) || isValidString(data.headName, 0, 120)) &&
+        data.isActive is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['id', 'clientName', 'companyName', 'email', 'assignedAdminUid', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'id', 'clientName', 'companyName', 'contactPerson', 'email', 'phone', 'address',
+          'receivedDate', 'requirements', 'assignedAdminUid', 'assignedAdminName', 'status',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.clientName, 2, 120) &&
+        isValidString(data.companyName, 2, 150) &&
+        (!('contactPerson' in data) || isValidString(data.contactPerson, 0, 120)) &&
+        isValidString(data.email, 3, 180) &&
+        (!('phone' in data) || isValidString(data.phone, 0, 32)) &&
+        (!('address' in data) || isValidString(data.address, 0, 400)) &&
+        (!('receivedDate' in data) || isValidString(data.receivedDate, 0, 32)) &&
+        (!('requirements' in data) || isValidString(data.requirements, 0, 2000)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        (!('assignedAdminName' in data) || isValidString(data.assignedAdminName, 0, 120)) &&
+        data.status in ['ACTIVE', 'ARCHIVED'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data) {
+      return data.keys().hasAll([
+          'id', 'projectCode', 'projectName', 'clientId', 'clientName', 'category',
+          'assignedAdminUid', 'assignedMemberUids', 'priority', 'status', 'progress',
+          'isArchived', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'projectCode', 'projectName', 'clientId', 'clientName', 'category',
+          'description', 'requirements', 'receivedDate', 'planningDate', 'startDate',
+          'expectedCompletionDate', 'actualCompletionDate', 'quotedAmount', 'budget',
+          'advanceReceived', 'totalReceived', 'pendingAmount', 'assignedAdminUid',
+          'assignedAdminName', 'assignedMemberUids', 'assignedMemberNames', 'priority',
+          'status', 'progress', 'internalRemarks', 'isArchived', 'createdByUid',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.projectCode, 8, 32) &&
+        data.projectCode.matches('^DSR-PRJ-[0-9]{4}-[0-9]{4}$') &&
+        isValidString(data.projectName, 2, 180) &&
+        isValidString(data.clientId, 1, 64) &&
+        isValidString(data.clientName, 1, 150) &&
+        data.category in [
+          'Cybersecurity', 'VAPT', 'Digital Transformation', 'AI & Automation',
+          'Software Development', 'Website Development', 'Social Media Management',
+          'EMS', 'OMS', 'Data Security', 'Consulting', 'Other'
+        ] &&
+        (!('description' in data) || isValidString(data.description, 0, 3000)) &&
+        (!('requirements' in data) || isValidString(data.requirements, 0, 3000)) &&
+        (!('receivedDate' in data) || isValidString(data.receivedDate, 0, 32)) &&
+        (!('planningDate' in data) || isValidString(data.planningDate, 0, 32)) &&
+        (!('startDate' in data) || isValidString(data.startDate, 0, 32)) &&
+        (!('expectedCompletionDate' in data) || isValidString(data.expectedCompletionDate, 0, 32)) &&
+        (!('actualCompletionDate' in data) || isValidString(data.actualCompletionDate, 0, 32)) &&
+        (!('quotedAmount' in data) || (data.quotedAmount is number && data.quotedAmount >= 0)) &&
+        (!('budget' in data) || (data.budget is number && data.budget >= 0)) &&
+        (!('advanceReceived' in data) || (data.advanceReceived is number && data.advanceReceived >= 0)) &&
+        (!('totalReceived' in data) || (data.totalReceived is number && data.totalReceived >= 0)) &&
+        (!('pendingAmount' in data) || (data.pendingAmount is number && data.pendingAmount >= 0)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        (!('assignedAdminName' in data) || isValidString(data.assignedAdminName, 0, 120)) &&
+        isValidMemberUids(data.assignedMemberUids) &&
+        (!('assignedMemberNames' in data) || isValidMemberNames(data.assignedMemberNames)) &&
+        data.priority in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] &&
+        data.status in [
+          'Lead Received', 'Proposal Sent', 'Awaiting Approval', 'Approved',
+          'Planning', 'In Progress', 'On Hold', 'Under Review', 'Completed', 'Cancelled'
+        ] &&
+        data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+        (!('internalRemarks' in data) || isValidString(data.internalRemarks, 0, 2000)) &&
+        data.isArchived is bool &&
+        isValidString(data.createdByUid, 1, 128) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMilestone(data) {
+      return data.keys().hasAll(['id', 'projectId', 'assignedAdminUid', 'projectMemberUids', 'title', 'dueDate', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'id', 'projectId', 'projectCode', 'assignedAdminUid', 'projectMemberUids',
+          'title', 'dueDate', 'status', 'deliverables', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        (!('projectCode' in data) || isValidString(data.projectCode, 0, 32)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidMemberUids(data.projectMemberUids) &&
+        isValidString(data.title, 2, 180) &&
+        isValidString(data.dueDate, 4, 32) &&
+        data.status in ['PLANNED', 'IN_PROGRESS', 'COMPLETED', 'DELAYED'] &&
+        (!('deliverables' in data) || isValidString(data.deliverables, 0, 1000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll([
+          'id', 'taskCode', 'projectId', 'projectName', 'title', 'assignedByUid',
+          'assignedAdminUid', 'assigneeUid', 'dueDate', 'priority', 'status',
+          'progress', 'weight', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'taskCode', 'projectId', 'projectCode', 'projectName', 'title', 'description',
+          'assignedByUid', 'assignedByName', 'assignedAdminUid', 'assigneeUid', 'assigneeName',
+          'assignedDate', 'startDate', 'dueDate', 'priority', 'status', 'progress', 'weight',
+          'blockerReason', 'reviewFeedback', 'submissionNote', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.taskCode, 8, 32) &&
+        data.taskCode.matches('^DSR-TSK-[0-9]{4,6}$') &&
+        isValidString(data.projectId, 1, 64) &&
+        (!('projectCode' in data) || isValidString(data.projectCode, 0, 32)) &&
+        isValidString(data.projectName, 1, 180) &&
+        isValidString(data.title, 2, 200) &&
+        (!('description' in data) || isValidString(data.description, 0, 3000)) &&
+        isValidString(data.assignedByUid, 1, 128) &&
+        (!('assignedByName' in data) || isValidString(data.assignedByName, 0, 120)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidString(data.assigneeUid, 1, 128) &&
+        (!('assigneeName' in data) || isValidString(data.assigneeName, 0, 120)) &&
+        (!('assignedDate' in data) || isValidString(data.assignedDate, 0, 32)) &&
+        (!('startDate' in data) || isValidString(data.startDate, 0, 32)) &&
+        isValidString(data.dueDate, 4, 32) &&
+        data.priority in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] &&
+        data.status in ['Not Started', 'In Progress', 'Under Review', 'Revision Required', 'Completed', 'Blocked'] &&
+        data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+        data.weight is number && data.weight >= 1 && data.weight <= 100 &&
+        (!('blockerReason' in data) || isValidString(data.blockerReason, 0, 1000)) &&
+        (!('reviewFeedback' in data) || isValidString(data.reviewFeedback, 0, 1500)) &&
+        (!('submissionNote' in data) || isValidString(data.submissionNote, 0, 1500)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTaskComment(data) {
+      return data.keys().hasAll(['id', 'taskId', 'projectId', 'assignedAdminUid', 'assigneeUid', 'authorUid', 'authorName', 'message', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'taskId', 'projectId', 'assignedAdminUid', 'assigneeUid', 'authorUid', 'authorName', 'authorRole', 'message', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.taskId, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidString(data.assigneeUid, 1, 128) &&
+        data.authorUid == request.auth.uid &&
+        isValidString(data.authorName, 1, 120) &&
+        (!('authorRole' in data) || data.authorRole in ['SUPER_ADMIN', 'ADMIN', 'TEAM_MEMBER']) &&
+        isValidString(data.message, 1, 2000) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidTaskAttachment(data) {
+      return data.keys().hasAll(['id', 'taskId', 'projectId', 'assignedAdminUid', 'assigneeUid', 'uploadedByUid', 'fileName', 'mimeType', 'fileSize', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'taskId', 'projectId', 'assignedAdminUid', 'assigneeUid', 'uploadedByUid', 'uploadedByName', 'fileName', 'mimeType', 'fileSize', 'dataUrl', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.taskId, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidString(data.assigneeUid, 1, 128) &&
+        data.uploadedByUid == request.auth.uid &&
+        (!('uploadedByName' in data) || isValidString(data.uploadedByName, 0, 120)) &&
+        isValidString(data.fileName, 1, 200) &&
+        isValidString(data.mimeType, 1, 120) &&
+        data.fileSize is number && data.fileSize > 0 && data.fileSize <= 5242880 &&
+        (!('dataUrl' in data) || isValidString(data.dataUrl, 0, 500000)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidTaskActivityLog(data) {
+      return data.keys().hasAll(['id', 'taskId', 'projectId', 'assignedAdminUid', 'assigneeUid', 'actorUid', 'action', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'taskId', 'projectId', 'assignedAdminUid', 'assigneeUid', 'actorUid', 'actorName', 'action', 'details', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.taskId, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidString(data.assigneeUid, 1, 128) &&
+        data.actorUid == request.auth.uid &&
+        (!('actorName' in data) || isValidString(data.actorName, 0, 120)) &&
+        isValidString(data.action, 1, 200) &&
+        (!('details' in data) || isValidString(data.details, 0, 1000)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidProjectDocument(data) {
+      return data.keys().hasAll(['id', 'projectId', 'assignedAdminUid', 'projectMemberUids', 'uploadedByUid', 'title', 'fileName', 'mimeType', 'fileSize', 'category', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'assignedAdminUid', 'projectMemberUids', 'uploadedByUid', 'uploadedByName', 'title', 'fileName', 'mimeType', 'fileSize', 'category', 'dataUrl', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidMemberUids(data.projectMemberUids) &&
+        data.uploadedByUid == request.auth.uid &&
+        (!('uploadedByName' in data) || isValidString(data.uploadedByName, 0, 120)) &&
+        isValidString(data.title, 1, 200) &&
+        isValidString(data.fileName, 1, 200) &&
+        isValidString(data.mimeType, 1, 120) &&
+        data.fileSize is number && data.fileSize > 0 && data.fileSize <= 5242880 &&
+        data.category in ['SOW', 'Architecture', 'VAPT Report', 'Contract', 'Deliverable', 'Other'] &&
+        (!('dataUrl' in data) || isValidString(data.dataUrl, 0, 500000)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidProjectExpense(data) {
+      return data.keys().hasAll(['id', 'projectId', 'assignedAdminUid', 'category', 'description', 'amount', 'expenseDate', 'recordedByUid', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'projectId', 'projectCode', 'projectName', 'assignedAdminUid', 'category', 'description', 'amount', 'expenseDate', 'recordedByUid', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        (!('projectCode' in data) || isValidString(data.projectCode, 0, 32)) &&
+        (!('projectName' in data) || isValidString(data.projectName, 0, 180)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        data.category in ['Operational', 'Vendor', 'Infrastructure', 'Licensing', 'Contractor'] &&
+        isValidString(data.description, 1, 500) &&
+        data.amount is number && data.amount > 0 &&
+        isValidString(data.expenseDate, 4, 32) &&
+        data.recordedByUid == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidProjectInvoice(data) {
+      return data.keys().hasAll(['id', 'invoiceNumber', 'projectId', 'clientId', 'assignedAdminUid', 'amount', 'paidAmount', 'dueDate', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'invoiceNumber', 'projectId', 'projectCode', 'projectName', 'clientId', 'clientName', 'assignedAdminUid', 'amount', 'paidAmount', 'issueDate', 'dueDate', 'status', 'createdAt', 'updatedAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.invoiceNumber, 8, 32) &&
+        data.invoiceNumber.matches('^DSR-INV-[0-9]{4}-[0-9]{4}$') &&
+        isValidString(data.projectId, 1, 64) &&
+        (!('projectCode' in data) || isValidString(data.projectCode, 0, 32)) &&
+        (!('projectName' in data) || isValidString(data.projectName, 0, 180)) &&
+        isValidString(data.clientId, 1, 64) &&
+        (!('clientName' in data) || isValidString(data.clientName, 0, 150)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        data.amount is number && data.amount > 0 &&
+        data.paidAmount is number && data.paidAmount >= 0 &&
+        (!('issueDate' in data) || isValidString(data.issueDate, 0, 32)) &&
+        isValidString(data.dueDate, 4, 32) &&
+        data.status in ['DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['id', 'invoiceId', 'projectId', 'assignedAdminUid', 'amount', 'paymentDate', 'method', 'recordedByUid', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'invoiceId', 'projectId', 'projectCode', 'assignedAdminUid', 'amount', 'paymentDate', 'method', 'reference', 'recordedByUid', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.invoiceId, 1, 64) &&
+        isValidString(data.projectId, 1, 64) &&
+        (!('projectCode' in data) || isValidString(data.projectCode, 0, 32)) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        data.amount is number && data.amount > 0 &&
+        isValidString(data.paymentDate, 4, 32) &&
+        data.method in ['Wire Transfer', 'ACH', 'Corporate Card', 'UPI / NEFT', 'Check'] &&
+        (!('reference' in data) || isValidString(data.reference, 0, 120)) &&
+        data.recordedByUid == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'recipientUid', 'type', 'title', 'message', 'isRead', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'recipientUid', 'type', 'title', 'message', 'entityType', 'entityId', 'isRead', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.recipientUid, 1, 128) &&
+        data.type in ['PROJECT_ASSIGNED', 'TASK_ASSIGNED', 'DEADLINE_APPROACHING', 'TASK_OVERDUE', 'PROJECT_STATUS', 'TASK_SUBMITTED', 'TASK_APPROVED', 'TASK_REJECTED', 'EXTENSION_REQUESTED', 'EXTENSION_DECIDED', 'PAYMENT_DUE', 'ANNOUNCEMENT'] &&
+        isValidString(data.title, 1, 180) &&
+        isValidString(data.message, 1, 800) &&
+        (!('entityType' in data) || isValidString(data.entityType, 0, 64)) &&
+        (!('entityId' in data) || isValidString(data.entityId, 0, 64)) &&
+        data.isRead is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidExtensionRequest(data) {
+      return data.keys().hasAll(['id', 'targetType', 'targetId', 'projectId', 'assignedAdminUid', 'requesterUid', 'currentDueDate', 'requestedDueDate', 'reason', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'targetType', 'targetId', 'targetTitle', 'projectId', 'assignedAdminUid', 'requesterUid', 'requesterName', 'currentDueDate', 'requestedDueDate', 'reason', 'status', 'reviewerUid', 'reviewNote', 'createdAt', 'updatedAt']) &&
+        isValidString(data.id, 1, 64) &&
+        data.targetType in ['TASK', 'PROJECT'] &&
+        isValidString(data.targetId, 1, 64) &&
+        (!('targetTitle' in data) || isValidString(data.targetTitle, 0, 200)) &&
+        isValidString(data.projectId, 1, 64) &&
+        isValidString(data.assignedAdminUid, 1, 128) &&
+        isValidString(data.requesterUid, 1, 128) &&
+        (!('requesterName' in data) || isValidString(data.requesterName, 0, 120)) &&
+        isValidString(data.currentDueDate, 4, 32) &&
+        isValidString(data.requestedDueDate, 4, 32) &&
+        isValidString(data.reason, 3, 1000) &&
+        data.status in ['PENDING', 'APPROVED', 'REJECTED'] &&
+        (!('reviewerUid' in data) || isValidString(data.reviewerUid, 0, 128)) &&
+        (!('reviewNote' in data) || isValidString(data.reviewNote, 0, 500)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'message', 'priority', 'authorUid', 'isActive', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'title', 'message', 'priority', 'authorUid', 'authorName', 'isActive', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.title, 2, 180) &&
+        isValidString(data.message, 2, 2000) &&
+        data.priority in ['NORMAL', 'IMPORTANT', 'URGENT'] &&
+        data.authorUid == request.auth.uid &&
+        (!('authorName' in data) || isValidString(data.authorName, 0, 120)) &&
+        data.isActive is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'actorUid', 'actorRole', 'action', 'resourceType', 'resourceId', 'summary', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'actorUid', 'actorEmail', 'actorRole', 'action', 'resourceType', 'resourceId', 'summary', 'createdAt']) &&
+        isValidString(data.id, 1, 64) &&
+        data.actorUid == request.auth.uid &&
+        (!('actorEmail' in data) || isValidString(data.actorEmail, 0, 180)) &&
+        data.actorRole in ['SUPER_ADMIN', 'ADMIN', 'TEAM_MEMBER'] &&
+        isValidString(data.action, 2, 120) &&
+        isValidString(data.resourceType, 2, 64) &&
+        isValidString(data.resourceId, 1, 128) &&
+        isValidString(data.summary, 2, 500) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidLoginSession(data) {
+      return data.keys().hasAll(['id', 'userUid', 'userEmail', 'userRole', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'userUid', 'userEmail', 'userRole', 'userAgent', 'status', 'createdAt', 'updatedAt']) &&
+        isValidString(data.id, 1, 64) &&
+        isValidString(data.userUid, 1, 128) &&
+        isValidString(data.userEmail, 3, 180) &&
+        data.userRole in ['SUPER_ADMIN', 'ADMIN', 'TEAM_MEMBER'] &&
+        (!('userAgent' in data) || isValidString(data.userAgent, 0, 300)) &&
+        data.status in ['ACTIVE', 'REVOKED', 'SIGNED_OUT'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSystemSetting(data) {
+      return data.keys().hasAll(['id', 'scope', 'companyName', 'currency', 'deadlineWarningDays', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'scope', 'companyName', 'currency', 'deadlineWarningDays', 'emailNotificationsEnabled', 'enforcePasswordRotation', 'updatedByUid', 'updatedAt']) &&
+        isValidString(data.id, 1, 64) &&
+        data.scope in ['public', 'restricted'] &&
+        isValidString(data.companyName, 2, 150) &&
+        isValidString(data.currency, 2, 16) &&
+        data.deadlineWarningDays is number && data.deadlineWarningDays >= 1 && data.deadlineWarningDays <= 30 &&
+        (!('emailNotificationsEnabled' in data) || data.emailNotificationsEnabled is bool) &&
+        (!('enforcePasswordRotation' in data) || data.enforcePasswordRotation is bool) &&
+        (!('updatedByUid' in data) || isValidString(data.updatedByUid, 0, 128)) &&
+        data.updatedAt is timestamp;
+    }
+
+    // ------------------------------------------------------------------
+    // Collection Match Rules
+    // ------------------------------------------------------------------
+    match /test/connection {
+      allow get: if true;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isSuperAdmin() || isOwner(userId) || (isAdmin() && existing().managerUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && (existing().uid == request.auth.uid || existing().managerUid == request.auth.uid));
+      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        (
+          isSuperAdmin() ||
+          (
+            isOwner(userId) &&
+            incoming().uid == request.auth.uid &&
+            incoming().status == 'ACTIVE' &&
+            ((isBootstrappedSuperAdmin() && incoming().role == 'SUPER_ADMIN') || (!isBootstrappedSuperAdmin() && incoming().role == 'TEAM_MEMBER'))
+          )
+        );
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time &&
+        incoming().uid == existing().uid &&
+        (
+          isSuperAdmin() ||
+          (
+            isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().status == existing().status &&
+            incoming().employeeId == existing().employeeId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'mustChangePassword', 'lastLoginAt', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isSuperAdmin();
+    }
+
+    match /departments/{deptId} {
+      allow get: if isValidId(deptId) && isSignedIn();
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().isActive == true);
+      allow create: if isValidId(deptId) && isSuperAdmin() && isValidDepartment(incoming()) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(deptId) && isSuperAdmin() && isValidDepartment(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(deptId) && isSuperAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow get: if isValidId(clientId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().assignedAdminUid == request.auth.uid);
+      allow create: if isValidId(clientId) && isSuperAdmin() && isValidClient(incoming()) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(clientId) && isSuperAdmin() && isValidClient(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(clientId) && isSuperAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow get: if isValidId(projectId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && existing().assignedAdminUid == request.auth.uid) ||
+        (isSignedIn() && request.auth.uid in existing().assignedMemberUids)
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (
+          existing().assignedAdminUid == request.auth.uid ||
+          request.auth.uid in existing().assignedMemberUids
+        )
+      );
+      allow create: if isValidId(projectId) && isSuperAdmin() && isValidProject(incoming()) &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time &&
+        incoming().projectCode == existing().projectCode && incoming().createdByUid == existing().createdByUid &&
+        (
+          isSuperAdmin() ||
+          (
+            isAdmin() &&
+            existing().status != 'Cancelled' &&
+            existing().assignedAdminUid == request.auth.uid &&
+            incoming().assignedAdminUid == existing().assignedAdminUid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'description', 'requirements', 'planningDate', 'startDate', 'expectedCompletionDate',
+              'assignedMemberUids', 'assignedMemberNames', 'priority', 'status', 'progress',
+              'internalRemarks', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(projectId) && isSuperAdmin();
+    }
+
+    match /milestones/{milestoneId} {
+      allow get: if isValidId(milestoneId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || request.auth.uid in existing().projectMemberUids))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || request.auth.uid in existing().projectMemberUids)
+      );
+      allow create: if isSignedIn() && isValidId(milestoneId) && isValidMilestone(incoming()) &&
+        exists(/databases/$(database)/documents/projects/$(incoming().projectId)) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        (isSuperAdmin() || (isAdmin() && incoming().assignedAdminUid == request.auth.uid));
+      allow update: if isSignedIn() && isValidId(milestoneId) && isValidMilestone(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time &&
+        incoming().projectId == existing().projectId &&
+        (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'dueDate', 'status', 'deliverables', 'projectMemberUids', 'updatedAt'])));
+      allow delete: if isValidId(milestoneId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+    }
+
+    match /tasks/{taskId} {
+      allow get: if isValidId(taskId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid)
+      );
+      allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) &&
+        exists(/databases/$(database)/documents/projects/$(incoming().projectId)) &&
+        incoming().assignedByUid == request.auth.uid &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time &&
+        (isSuperAdmin() || (isAdmin() && incoming().assignedAdminUid == request.auth.uid));
+      allow update: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time &&
+        incoming().taskCode == existing().taskCode && incoming().projectId == existing().projectId &&
+        incoming().assignedByUid == existing().assignedByUid &&
+        (
+          isSuperAdmin() ||
+          (
+            isAdmin() && existing().assignedAdminUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'description', 'assigneeUid', 'assigneeName', 'startDate', 'dueDate',
+              'priority', 'status', 'progress', 'weight', 'reviewFeedback', 'updatedAt'
+            ])
+          ) ||
+          (
+            existing().assigneeUid == request.auth.uid &&
+            existing().status != 'Completed' &&
+            incoming().status in ['Not Started', 'In Progress', 'Under Review', 'Blocked'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'progress', 'blockerReason', 'submissionNote', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(taskId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+    }
+
+    match /task_comments/{commentId} {
+      allow get: if isValidId(commentId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid || existing().authorUid == request.auth.uid))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid || existing().authorUid == request.auth.uid)
+      );
+      allow create: if isSignedIn() && isValidId(commentId) && isValidTaskComment(incoming()) &&
+        exists(/databases/$(database)/documents/tasks/$(incoming().taskId)) &&
+        incoming().createdAt == request.time &&
+        (isSuperAdmin() || incoming().assignedAdminUid == request.auth.uid || incoming().assigneeUid == request.auth.uid);
+      allow update: if false;
+      allow delete: if isValidId(commentId) && isSuperAdmin();
+    }
+
+    match /task_attachments/{attachmentId} {
+      allow get: if isValidId(attachmentId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid || existing().uploadedByUid == request.auth.uid))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid || existing().uploadedByUid == request.auth.uid)
+      );
+      allow create: if isSignedIn() && isValidId(attachmentId) && isValidTaskAttachment(incoming()) &&
+        exists(/databases/$(database)/documents/tasks/$(incoming().taskId)) &&
+        incoming().createdAt == request.time &&
+        (isSuperAdmin() || incoming().assignedAdminUid == request.auth.uid || incoming().assigneeUid == request.auth.uid);
+      allow update: if false;
+      allow delete: if isValidId(attachmentId) && (isSuperAdmin() || (isSignedIn() && existing().uploadedByUid == request.auth.uid));
+    }
+
+    match /task_activity_logs/{logId} {
+      allow get: if isValidId(logId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().assigneeUid == request.auth.uid)
+      );
+      allow create: if isSignedIn() && isValidId(logId) && isValidTaskActivityLog(incoming()) &&
+        exists(/databases/$(database)/documents/tasks/$(incoming().taskId)) &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /project_documents/{docId} {
+      allow get: if isValidId(docId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || request.auth.uid in existing().projectMemberUids))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || request.auth.uid in existing().projectMemberUids)
+      );
+      allow create: if isSignedIn() && isValidId(docId) && isValidProjectDocument(incoming()) &&
+        exists(/databases/$(database)/documents/projects/$(incoming().projectId)) &&
+        incoming().createdAt == request.time &&
+        (isSuperAdmin() || (isAdmin() && incoming().assignedAdminUid == request.auth.uid));
+      allow update: if false;
+      allow delete: if isValidId(docId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+    }
+
+    match /project_expenses/{expenseId} {
+      allow get: if isValidId(expenseId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().assignedAdminUid == request.auth.uid);
+      allow create: if isValidId(expenseId) && isSuperAdmin() && isValidProjectExpense(incoming()) &&
+        exists(/databases/$(database)/documents/projects/$(incoming().projectId)) &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(expenseId) && isSuperAdmin();
+    }
+
+    match /project_invoices/{invoiceId} {
+      allow get: if isValidId(invoiceId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().assignedAdminUid == request.auth.uid);
+      allow create: if isValidId(invoiceId) && isSuperAdmin() && isValidProjectInvoice(incoming()) &&
+        exists(/databases/$(database)/documents/projects/$(incoming().projectId)) &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(invoiceId) && isSuperAdmin() && isValidProjectInvoice(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(invoiceId) && isSuperAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().assignedAdminUid == request.auth.uid);
+      allow create: if isValidId(paymentId) && isSuperAdmin() && isValidPayment(incoming()) &&
+        exists(/databases/$(database)/documents/project_invoices/$(incoming().invoiceId)) &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(paymentId) && isSuperAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (isSuperAdmin() || (isSignedIn() && existing().recipientUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().recipientUid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().recipientUid == existing().recipientUid &&
+        (isSuperAdmin() || (existing().recipientUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['isRead'])));
+      allow delete: if isValidId(notificationId) && (isSuperAdmin() || (isSignedIn() && existing().recipientUid == request.auth.uid));
+    }
+
+    match /deadline_extension_requests/{requestId} {
+      allow get: if isValidId(requestId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().requesterUid == request.auth.uid))
+      );
+      allow list: if isBootstrappedSuperAdmin() || (
+        isSignedIn() && (existing().assignedAdminUid == request.auth.uid || existing().requesterUid == request.auth.uid)
+      );
+      allow create: if isSignedIn() && isValidId(requestId) && isValidExtensionRequest(incoming()) &&
+        incoming().requesterUid == request.auth.uid &&
+        incoming().status == 'PENDING' &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(requestId) && isValidExtensionRequest(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time &&
+        incoming().requesterUid == existing().requesterUid &&
+        existing().status == 'PENDING' &&
+        (isSuperAdmin() || (isAdmin() && existing().assignedAdminUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewerUid', 'reviewNote', 'updatedAt'])));
+      allow delete: if isValidId(requestId) && isSuperAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow get: if isValidId(announcementId) && isSignedIn();
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().isActive == true);
+      allow create: if isValidId(announcementId) && isSuperAdmin() && isValidAnnouncement(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(announcementId) && isSuperAdmin() && isValidAnnouncement(incoming()) &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(announcementId) && isSuperAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow get: if isValidId(logId) && (isSuperAdmin() || (isSignedIn() && existing().actorUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().actorUid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /login_sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && (isSuperAdmin() || (isSignedIn() && existing().userUid == request.auth.uid));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().userUid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(sessionId) && isValidLoginSession(incoming()) &&
+        incoming().userUid == request.auth.uid &&
+        incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(sessionId) && isValidLoginSession(incoming()) &&
+        incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time &&
+        (isSuperAdmin() || (existing().userUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])));
+      allow delete: if isValidId(sessionId) && isSuperAdmin();
+    }
+
+    match /system_settings/{settingId} {
+      allow get: if isValidId(settingId) && (isSuperAdmin() || (isSignedIn() && existing().scope == 'public'));
+      allow list: if isBootstrappedSuperAdmin() || (isSignedIn() && existing().scope == 'public');
+      allow create, update: if isValidId(settingId) && isSuperAdmin() && isValidSystemSetting(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

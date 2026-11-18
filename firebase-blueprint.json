@@ -1,0 +1,477 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Enterprise user account and employee profile with RBAC role and permissions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "employeeId": { "type": "string", "pattern": "^DSR-(SA|ADM|TM|EMP)-[0-9]{3,5}$", "maxLength": 32 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 180 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "department": { "type": "string", "maxLength": 100 },
+        "designation": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "TEAM_MEMBER"] },
+        "permissions": { "type": "array", "description": "Bounded permission keys (max 30)." },
+        "managerUid": { "type": "string", "maxLength": 128 },
+        "joiningDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "mustChangePassword": { "type": "boolean" },
+        "lastLoginAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "employeeId", "displayName", "email", "role", "status", "createdAt", "updatedAt"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Organizational division inside DSR SecureTech.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "headUid": { "type": "string", "maxLength": 128 },
+        "headName": { "type": "string", "maxLength": 120 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "isActive", "createdAt", "updatedAt"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Enterprise client organization and contact metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "companyName": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "contactPerson": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 180 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "address": { "type": "string", "maxLength": 400 },
+        "receivedDate": { "type": "string", "maxLength": 32 },
+        "requirements": { "type": "string", "maxLength": 2000 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "assignedAdminName": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["ACTIVE", "ARCHIVED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clientName", "companyName", "email", "assignedAdminUid", "status", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Enterprise project record with auto-generated DSR-PRJ code and weighted task progress.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "projectCode": { "type": "string", "pattern": "^DSR-PRJ-[0-9]{4}-[0-9]{4}$", "maxLength": 32 },
+        "projectName": { "type": "string", "minLength": 2, "maxLength": 180 },
+        "clientId": { "type": "string", "maxLength": 64 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "enum": ["Cybersecurity", "VAPT", "Digital Transformation", "AI & Automation", "Software Development", "Website Development", "Social Media Management", "EMS", "OMS", "Data Security", "Consulting", "Other"] },
+        "description": { "type": "string", "maxLength": 3000 },
+        "requirements": { "type": "string", "maxLength": 3000 },
+        "receivedDate": { "type": "string", "maxLength": 32 },
+        "planningDate": { "type": "string", "maxLength": 32 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "expectedCompletionDate": { "type": "string", "maxLength": 32 },
+        "actualCompletionDate": { "type": "string", "maxLength": 32 },
+        "quotedAmount": { "type": "number" },
+        "budget": { "type": "number" },
+        "advanceReceived": { "type": "number" },
+        "totalReceived": { "type": "number" },
+        "pendingAmount": { "type": "number" },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "assignedAdminName": { "type": "string", "maxLength": 120 },
+        "assignedMemberUids": { "type": "array", "description": "Bounded array of team member UIDs (max 25)." },
+        "assignedMemberNames": { "type": "array", "description": "Bounded array of team member names (max 25)." },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        "status": { "type": "string", "enum": ["Lead Received", "Proposal Sent", "Awaiting Approval", "Approved", "Planning", "In Progress", "On Hold", "Under Review", "Completed", "Cancelled"] },
+        "progress": { "type": "number" },
+        "internalRemarks": { "type": "string", "maxLength": 2000 },
+        "isArchived": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectCode", "projectName", "clientId", "clientName", "category", "assignedAdminUid", "assignedMemberUids", "priority", "status", "progress", "isArchived", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "Milestone": {
+      "title": "Milestone",
+      "description": "Project delivery milestone linked to a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "projectCode": { "type": "string", "maxLength": 32 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "projectMemberUids": { "type": "array" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 180 },
+        "dueDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["PLANNED", "IN_PROGRESS", "COMPLETED", "DELAYED"] },
+        "deliverables": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "assignedAdminUid", "projectMemberUids", "title", "dueDate", "status", "createdAt", "updatedAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Deliverable work item assigned to a team member under a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "taskCode": { "type": "string", "pattern": "^DSR-TSK-[0-9]{4,6}$", "maxLength": 32 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "projectCode": { "type": "string", "maxLength": 32 },
+        "projectName": { "type": "string", "maxLength": 180 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 3000 },
+        "assignedByUid": { "type": "string", "maxLength": 128 },
+        "assignedByName": { "type": "string", "maxLength": 120 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "assigneeUid": { "type": "string", "maxLength": 128 },
+        "assigneeName": { "type": "string", "maxLength": 120 },
+        "assignedDate": { "type": "string", "maxLength": 32 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "dueDate": { "type": "string", "maxLength": 32 },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        "status": { "type": "string", "enum": ["Not Started", "In Progress", "Under Review", "Revision Required", "Completed", "Blocked"] },
+        "progress": { "type": "number" },
+        "weight": { "type": "number" },
+        "blockerReason": { "type": "string", "maxLength": 1000 },
+        "reviewFeedback": { "type": "string", "maxLength": 1500 },
+        "submissionNote": { "type": "string", "maxLength": 1500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "taskCode", "projectId", "projectName", "title", "assignedByUid", "assignedAdminUid", "assigneeUid", "dueDate", "priority", "status", "progress", "weight", "createdAt", "updatedAt"]
+    },
+    "TaskComment": {
+      "title": "TaskComment",
+      "description": "Discussion comment on a task.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "taskId": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "assigneeUid": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 120 },
+        "authorRole": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "TEAM_MEMBER"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "taskId", "projectId", "assignedAdminUid", "assigneeUid", "authorUid", "authorName", "message", "createdAt"]
+    },
+    "TaskAttachment": {
+      "title": "TaskAttachment",
+      "description": "Uploaded deliverable file metadata and secure payload reference.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "taskId": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "assigneeUid": { "type": "string", "maxLength": 128 },
+        "uploadedByUid": { "type": "string", "maxLength": 128 },
+        "uploadedByName": { "type": "string", "maxLength": 120 },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "mimeType": { "type": "string", "maxLength": 120 },
+        "fileSize": { "type": "number" },
+        "dataUrl": { "type": "string", "maxLength": 500000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "taskId", "projectId", "assignedAdminUid", "assigneeUid", "uploadedByUid", "fileName", "mimeType", "fileSize", "createdAt"]
+    },
+    "TaskActivityLog": {
+      "title": "TaskActivityLog",
+      "description": "Immutable activity record for task state transitions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "taskId": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "assigneeUid": { "type": "string", "maxLength": 128 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "action": { "type": "string", "maxLength": 200 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "taskId", "projectId", "assignedAdminUid", "assigneeUid", "actorUid", "action", "createdAt"]
+    },
+    "ProjectDocument": {
+      "title": "ProjectDocument",
+      "description": "Document attached to a project workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "projectMemberUids": { "type": "array" },
+        "uploadedByUid": { "type": "string", "maxLength": 128 },
+        "uploadedByName": { "type": "string", "maxLength": 120 },
+        "title": { "type": "string", "maxLength": 200 },
+        "fileName": { "type": "string", "maxLength": 200 },
+        "mimeType": { "type": "string", "maxLength": 120 },
+        "fileSize": { "type": "number" },
+        "category": { "type": "string", "enum": ["SOW", "Architecture", "VAPT Report", "Contract", "Deliverable", "Other"] },
+        "dataUrl": { "type": "string", "maxLength": 500000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "assignedAdminUid", "projectMemberUids", "uploadedByUid", "title", "fileName", "mimeType", "fileSize", "category", "createdAt"]
+    },
+    "ProjectExpense": {
+      "title": "ProjectExpense",
+      "description": "Operational or vendor expense charged to a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "projectCode": { "type": "string", "maxLength": 32 },
+        "projectName": { "type": "string", "maxLength": 180 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["Operational", "Vendor", "Infrastructure", "Licensing", "Contractor"] },
+        "description": { "type": "string", "maxLength": 500 },
+        "amount": { "type": "number" },
+        "expenseDate": { "type": "string", "maxLength": 32 },
+        "recordedByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "assignedAdminUid", "category", "description", "amount", "expenseDate", "recordedByUid", "createdAt"]
+    },
+    "ProjectInvoice": {
+      "title": "ProjectInvoice",
+      "description": "Client billing invoice for a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "invoiceNumber": { "type": "string", "pattern": "^DSR-INV-[0-9]{4}-[0-9]{4}$", "maxLength": 32 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "projectCode": { "type": "string", "maxLength": 32 },
+        "projectName": { "type": "string", "maxLength": 180 },
+        "clientId": { "type": "string", "maxLength": 64 },
+        "clientName": { "type": "string", "maxLength": 150 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "issueDate": { "type": "string", "maxLength": 32 },
+        "dueDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["DRAFT", "SENT", "PARTIAL", "PAID", "OVERDUE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "invoiceNumber", "projectId", "clientId", "assignedAdminUid", "amount", "paidAmount", "dueDate", "status", "createdAt", "updatedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Recorded client payment against an invoice/project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "invoiceId": { "type": "string", "maxLength": 64 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "projectCode": { "type": "string", "maxLength": 32 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "paymentDate": { "type": "string", "maxLength": 32 },
+        "method": { "type": "string", "enum": ["Wire Transfer", "ACH", "Corporate Card", "UPI / NEFT", "Check"] },
+        "reference": { "type": "string", "maxLength": 120 },
+        "recordedByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "invoiceId", "projectId", "assignedAdminUid", "amount", "paymentDate", "method", "recordedByUid", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification targeted to a specific user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "recipientUid": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["PROJECT_ASSIGNED", "TASK_ASSIGNED", "DEADLINE_APPROACHING", "TASK_OVERDUE", "PROJECT_STATUS", "TASK_SUBMITTED", "TASK_APPROVED", "TASK_REJECTED", "EXTENSION_REQUESTED", "EXTENSION_DECIDED", "PAYMENT_DUE", "ANNOUNCEMENT"] },
+        "title": { "type": "string", "maxLength": 180 },
+        "message": { "type": "string", "maxLength": 800 },
+        "entityType": { "type": "string", "maxLength": 64 },
+        "entityId": { "type": "string", "maxLength": 64 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "recipientUid", "type", "title", "message", "isRead", "createdAt"]
+    },
+    "DeadlineExtensionRequest": {
+      "title": "DeadlineExtensionRequest",
+      "description": "Request to extend a task or project deadline.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "targetType": { "type": "string", "enum": ["TASK", "PROJECT"] },
+        "targetId": { "type": "string", "maxLength": 64 },
+        "targetTitle": { "type": "string", "maxLength": 200 },
+        "projectId": { "type": "string", "maxLength": 64 },
+        "assignedAdminUid": { "type": "string", "maxLength": 128 },
+        "requesterUid": { "type": "string", "maxLength": 128 },
+        "requesterName": { "type": "string", "maxLength": 120 },
+        "currentDueDate": { "type": "string", "maxLength": 32 },
+        "requestedDueDate": { "type": "string", "maxLength": 32 },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "reviewerUid": { "type": "string", "maxLength": 128 },
+        "reviewNote": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "targetType", "targetId", "projectId", "assignedAdminUid", "requesterUid", "currentDueDate", "requestedDueDate", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Organization-wide announcement published by Super Admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 180 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "priority": { "type": "string", "enum": ["NORMAL", "IMPORTANT", "URGENT"] },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 120 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "message", "priority", "authorUid", "isActive", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and governance audit trail event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 180 },
+        "actorRole": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "TEAM_MEMBER"] },
+        "action": { "type": "string", "maxLength": 120 },
+        "resourceType": { "type": "string", "maxLength": 64 },
+        "resourceId": { "type": "string", "maxLength": 128 },
+        "summary": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorUid", "actorRole", "action", "resourceType", "resourceId", "summary", "createdAt"]
+    },
+    "LoginSession": {
+      "title": "LoginSession",
+      "description": "Authentication session record for security monitoring.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "userUid": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 180 },
+        "userRole": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "TEAM_MEMBER"] },
+        "userAgent": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["ACTIVE", "REVOKED", "SIGNED_OUT"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userUid", "userEmail", "userRole", "status", "createdAt", "updatedAt"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Organization configuration and notification preferences.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "scope": { "type": "string", "enum": ["public", "restricted"] },
+        "companyName": { "type": "string", "maxLength": 150 },
+        "currency": { "type": "string", "maxLength": 16 },
+        "deadlineWarningDays": { "type": "number" },
+        "emailNotificationsEnabled": { "type": "boolean" },
+        "enforcePasswordRotation": { "type": "boolean" },
+        "updatedByUid": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "scope", "companyName", "currency", "deadlineWarningDays", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles, employee metadata, and RBAC assignments."
+    },
+    "/departments/{deptId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "DSR SecureTech organizational departments."
+    },
+    "/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Enterprise clients managed by Super Admin and assigned Admins."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Enterprise projects with auto-generated IDs and weighted task progress."
+    },
+    "/milestones/{milestoneId}": {
+      "schema": { "$ref": "#/entities/Milestone" },
+      "description": "Project delivery milestones."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Tasks assigned by Admins/Super Admin to Team Members."
+    },
+    "/task_comments/{commentId}": {
+      "schema": { "$ref": "#/entities/TaskComment" },
+      "description": "Task discussion comments."
+    },
+    "/task_attachments/{attachmentId}": {
+      "schema": { "$ref": "#/entities/TaskAttachment" },
+      "description": "Task deliverable file attachments."
+    },
+    "/task_activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/TaskActivityLog" },
+      "description": "Task transition activity history."
+    },
+    "/project_documents/{docId}": {
+      "schema": { "$ref": "#/entities/ProjectDocument" },
+      "description": "Project technical and SOW documents."
+    },
+    "/project_expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/ProjectExpense" },
+      "description": "Operational and vendor expenses per project."
+    },
+    "/project_invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/ProjectInvoice" },
+      "description": "Client invoices and billing status."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Recorded client payments."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "In-app notifications per user."
+    },
+    "/deadline_extension_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/DeadlineExtensionRequest" },
+      "description": "Deadline extension workflow requests."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Admin announcements broadcast across the organization."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable organizational audit trail."
+    },
+    "/login_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/LoginSession" },
+      "description": "Active and historical login sessions."
+    },
+    "/system_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSetting" },
+      "description": "Global platform configuration."
+    }
+  }
+}

@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #090b0e;
+    color: #f3f4f6;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Enterprise surface styling with restrained emerald/gold glow */
+.glass-surface {
+  background: linear-gradient(180deg, rgba(20, 24, 31, 0.88) 0%, rgba(14, 17, 22, 0.94) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -12px rgba(0, 0, 0, 0.65);
+}
+
+.glass-surface-emerald {
+  background: linear-gradient(180deg, rgba(16, 26, 24, 0.9) 0%, rgba(12, 16, 20, 0.96) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  box-shadow: 0 0 24px -8px rgba(16, 185, 129, 0.16);
+}
+
+.glass-surface-gold {
+  background: linear-gradient(180deg, rgba(26, 23, 16, 0.9) 0%, rgba(14, 16, 20, 0.96) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  box-shadow: 0 0 24px -8px rgba(212, 175, 55, 0.14);
+}
+
+/* Subtle custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0e12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #232a35;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333e4f;
+}
+
+/* 3D spatial surface depth without distracting layout shifts */
+.spatial-card-3d {
+  transform: perspective(1100px) rotateX(0deg) rotateY(0deg) translateZ(0);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease, box-shadow 220ms ease;
+  will-change: transform;
+}
+
+.spatial-card-3d:hover {
+  transform: perspective(1100px) rotateX(1.5deg) rotateY(-1.5deg) translateY(-2px);
+  box-shadow: 0 18px 36px -16px rgba(0, 0, 0, 0.8), 0 0 24px -10px rgba(16, 185, 129, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .spatial-card-3d:hover {
+    transform: none;
+  }
+}
